@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Catatan Barang Masuk & Keluar</title>
+    <!-- Memuat Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat ikon dari Lucide (versi non-React) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Menggunakan font Inter dari Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        /* Animasi sederhana untuk modal */
+        .modal-enter {
+            animation: modal-in 0.3s forwards;
+        }
+        .modal-leave {
+            animation: modal-out 0.3s forwards;
+        }
+        @keyframes modal-in {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes modal-out {
+            from { opacity: 1; transform: scale(1); }
+            to { opacity: 0; transform: scale(0.9); }
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
+        <!-- Judul Aplikasi -->
+        <header class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Sistem Inventaris Barang</h1>
+            <p class="text-gray-500 mt-2">Catat pergerakan barang masuk dan keluar dengan mudah.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Kolom Kiri: Form Tambah Barang & Daftar Barang -->
+            <div class="lg:col-span-2">
+                <!-- Form untuk menambah barang baru -->
+                <div class="bg-white p-6 rounded-xl shadow-lg mb-8">
+                    <h2 class="text-xl font-semibold mb-4">Tambah Barang Baru</h2>
+                    <form id="add-item-form" class="space-y-4">
+                        <div>
+                            <label for="item-name" class="block text-sm font-medium text-gray-700">Nama Barang</label>
+                            <input type="text" id="item-name" placeholder="Contoh: Buku Tulis" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" required>
+                        </div>
+                        <div>
+                            <label for="initial-stock" class="block text-sm font-medium text-gray-700">Stok Awal</label>
+                            <input type="number" id="initial-stock" placeholder="Contoh: 100" min="0" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" required>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-300 ease-in-out flex items-center justify-center">
+                            <i data-lucide="plus" class="mr-2 h-5 w-5"></i>
+                            Tambah Barang
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Daftar barang inventaris -->
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4">Daftar Barang</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-gray-500">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 rounded-l-lg">Nama Barang</th>
+                                    <th scope="col" class="px-6 py-3">Total Keluar</th>
+                                    <th scope="col" class="px-6 py-3">Sisa Barang</th>
+                                    <th scope="col" class="px-6 py-3 text-center rounded-r-lg">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-list">
+                                <!-- Data barang akan dimuat di sini oleh JavaScript -->
+                            </tbody>
+                        </table>
+                        <div id="loading-inventory" class="text-center py-4">Memuat data barang...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Kolom Kanan: Riwayat Transaksi -->
+            <div class="lg:col-span-1">
+                <div class="bg-white p-6 rounded-xl shadow-lg h-full">
+                    <h2 class="text-xl font-semibold mb-4">Riwayat Transaksi</h2>
+                    <div id="transaction-log" class="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                        <!-- Log transaksi akan dimuat di sini -->
+                    </div>
+                    <div id="loading-transactions" class="text-center py-4">Memuat riwayat transaksi...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal untuk transaksi barang masuk/keluar -->
+    <div id="transaction-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md modal-enter">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-bold" id="modal-title">Catat Transaksi</h3>
+                    <button id="close-modal-btn" class="text-gray-400 hover:text-gray-600">
+                        <i data-lucide="x" class="h-6 w-6"></i>
+                    </button>
+                </div>
+                <form id="transaction-form">
+                    <input type="hidden" id="modal-item-id">
+                    <input type="hidden" id="modal-transaction-type">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="transaction-quantity" class="block text-sm font-medium text-gray-700">Jumlah</label>
+                            <input type="number" id="transaction-quantity" min="1" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </div>
+                         <div id="notes-field-container" class="hidden">
+                            <label for="transaction-notes" class="block text-sm font-medium text-gray-700">Keterangan Keluar</label>
+                            <textarea id="transaction-notes" placeholder="Contoh: Untuk departemen marketing" rows="2" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition"></textarea>
+                        </div>
+                        <div id="notes-in-field-container" class="hidden">
+                            <label for="transaction-notes-in" class="block text-sm font-medium text-gray-700">Keterangan Masuk</label>
+                            <select id="transaction-notes-in" class="mt-1 block w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition">
+                                <option value="">Tidak ada keterangan</option>
+                                <option value="Baru">Baru</option>
+                                <option value="Ganti">Ganti</option>
+                                <option value="Error">Error</option>
+                                <option value="Mati">Mati</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex justify-end space-x-3">
+                        <button type="button" id="cancel-modal-btn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition">Batal</button>
+                        <button type="submit" id="confirm-transaction-btn" class="text-white font-semibold py-2 px-4 rounded-lg transition">Konfirmasi</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal konfirmasi hapus -->
+    <div id="delete-confirm-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm modal-enter p-6 text-center">
+            <h3 class="text-lg font-bold mb-2">Anda Yakin?</h3>
+            <p class="text-gray-600 mb-6">Barang ini akan dihapus secara permanen. Aksi ini tidak dapat dibatalkan.</p>
+            <div class="flex justify-center space-x-4">
+                <button id="cancel-delete-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-300 transition">Batal</button>
+                <button id="confirm-delete-btn" class="bg-red-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-700 transition">Hapus</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        // Impor fungsi yang diperlukan dari Firebase SDK
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, getDocs, onSnapshot, updateDoc, deleteDoc, serverTimestamp, query, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Konfigurasi Firebase Anda
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "YOUR_API_KEY", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-inventory-app';
+
+        // Inisialisasi Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let userId = null;
+        let inventoryCollectionRef = null;
+        let transactionsCollectionRef = null;
+        
+        let unsubscribeInventory = null;
+        let unsubscribeTransactions = null;
+
+        // Elemen DOM
+        const addItemForm = document.getElementById('add-item-form');
+        const itemNameInput = document.getElementById('item-name');
+        const initialStockInput = document.getElementById('initial-stock');
+        const inventoryList = document.getElementById('inventory-list');
+        const transactionLog = document.getElementById('transaction-log');
+        const loadingInventory = document.getElementById('loading-inventory');
+        const loadingTransactions = document.getElementById('loading-transactions');
+
+        // Elemen Modal Transaksi
+        const transactionModal = document.getElementById('transaction-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const cancelModalBtn = document.getElementById('cancel-modal-btn');
+        const transactionForm = document.getElementById('transaction-form');
+        const modalItemId = document.getElementById('modal-item-id');
+        const modalTransactionType = document.getElementById('modal-transaction-type');
+        const transactionQuantity = document.getElementById('transaction-quantity');
+        const confirmTransactionBtn = document.getElementById('confirm-transaction-btn');
+        const notesFieldContainer = document.getElementById('notes-field-container');
+        const transactionNotes = document.getElementById('transaction-notes');
+        const notesInFieldContainer = document.getElementById('notes-in-field-container');
+        const transactionNotesIn = document.getElementById('transaction-notes-in');
+        
+        // Elemen Modal Hapus
+        const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+        const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+        const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+        let itemToDeleteId = null;
+
+        // Fungsi untuk merender daftar inventaris
+        function renderInventory(items) {
+            inventoryList.innerHTML = '';
+            if (items.length === 0) {
+                loadingInventory.textContent = 'Belum ada barang. Silakan tambahkan barang baru.';
+                return;
+            }
+            loadingInventory.style.display = 'none';
+
+            items.sort((a, b) => a.name.localeCompare(b.name)); // Urutkan berdasarkan nama
+
+            items.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${item.name}</td>
+                    <td class="px-6 py-4 text-lg font-semibold">${item.totalOut || 0}</td>
+                    <td class="px-6 py-4 text-lg font-semibold">${item.stock}</td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="flex justify-center items-center space-x-2">
+                            <button data-id="${item.id}" data-name="${item.name}" data-stock="${item.stock}" class="stock-in-btn bg-green-100 text-green-700 px-3 py-1 rounded-md text-xs font-medium hover:bg-green-200 transition">Masuk</button>
+                            <button data-id="${item.id}" data-name="${item.name}" data-stock="${item.stock}" class="stock-out-btn bg-yellow-100 text-yellow-700 px-3 py-1 rounded-md text-xs font-medium hover:bg-yellow-200 transition">Keluar</button>
+                            <button data-id="${item.id}" class="delete-item-btn text-red-500 hover:text-red-700 transition">
+                                <i data-lucide="trash-2" class="h-4 w-4"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                inventoryList.appendChild(row);
+            });
+            lucide.createIcons(); // Panggil lucide untuk merender ikon dinamis
+        }
+
+        // Fungsi untuk merender riwayat transaksi
+        function renderTransactions(transactions) {
+            transactionLog.innerHTML = '';
+            if (transactions.length === 0) {
+                loadingTransactions.textContent = 'Belum ada transaksi.';
+                return;
+            }
+            loadingTransactions.style.display = 'none';
+            
+            // Urutkan transaksi dari yang terbaru, tangani kasus timestamp null
+            transactions.sort((a, b) => {
+                const timeA = a.timestamp ? a.timestamp.toMillis() : 0;
+                const timeB = b.timestamp ? b.timestamp.toMillis() : 0;
+                return timeB - timeA;
+            });
+
+            transactions.forEach(log => {
+                const logEntry = document.createElement('div');
+                const isMasuk = log.type === 'masuk';
+                const bgColor = isMasuk ? 'bg-green-50' : 'bg-yellow-50';
+                const textColor = isMasuk ? 'text-green-600' : 'text-yellow-600';
+                const icon = isMasuk 
+                    ? `<i data-lucide="arrow-right-circle" class="mr-3 h-5 w-5"></i>`
+                    : `<i data-lucide="arrow-left-circle" class="mr-3 h-5 w-5"></i>`;
+
+                let notesHTML = '';
+                if (log.notes) {
+                    notesHTML = `<p class="text-xs text-gray-500 mt-1 pl-8 italic">Ket: ${log.notes}</p>`;
+                }
+                
+                // Periksa apakah timestamp ada sebelum menampilkannya
+                const timestampText = log.timestamp ? log.timestamp.toDate().toLocaleString('id-ID') : 'Baru saja';
+
+                logEntry.className = `p-3 rounded-lg ${bgColor}`;
+                logEntry.innerHTML = `
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0 ${textColor}">${icon}</div>
+                        <div>
+                            <p class="text-sm font-medium text-gray-800">${log.quantity} x ${log.itemName}</p>
+                            <p class="text-xs text-gray-500">${timestampText}</p>
+                        </div>
+                    </div>
+                    ${notesHTML}
+                `;
+                transactionLog.appendChild(logEntry);
+            });
+            lucide.createIcons(); // Panggil lucide untuk merender ikon dinamis
+        }
+        
+        // Fungsi untuk membuka dan menutup modal
+        function openModal(type, item) {
+            modalTransactionType.value = type;
+            modalItemId.value = item.id;
+            transactionQuantity.value = '';
+            transactionNotes.value = '';
+            transactionNotesIn.value = '';
+            
+            if (type === 'masuk') {
+                modalTitle.textContent = `Barang Masuk: ${item.name}`;
+                confirmTransactionBtn.className = 'bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition';
+                confirmTransactionBtn.textContent = 'Simpan Masuk';
+                notesFieldContainer.classList.add('hidden');
+                notesInFieldContainer.classList.remove('hidden');
+            } else {
+                modalTitle.textContent = `Barang Keluar: ${item.name}`;
+                transactionQuantity.max = item.stock;
+                confirmTransactionBtn.className = 'bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition';
+                confirmTransactionBtn.textContent = 'Simpan Keluar';
+                notesFieldContainer.classList.remove('hidden');
+                notesInFieldContainer.classList.add('hidden');
+            }
+            
+            transactionModal.classList.remove('hidden');
+            transactionModal.querySelector('div').classList.add('modal-enter');
+            transactionModal.querySelector('div').classList.remove('modal-leave');
+        }
+
+        function closeModal() {
+            const modalContent = transactionModal.querySelector('div');
+            modalContent.classList.add('modal-leave');
+            modalContent.classList.remove('modal-enter');
+            setTimeout(() => {
+                transactionModal.classList.add('hidden');
+            }, 300);
+        }
+        
+        function openDeleteModal(id) {
+            itemToDeleteId = id;
+            deleteConfirmModal.classList.remove('hidden');
+            deleteConfirmModal.querySelector('div').classList.add('modal-enter');
+            deleteConfirmModal.querySelector('div').classList.remove('modal-leave');
+        }
+
+        function closeDeleteModal() {
+            const modalContent = deleteConfirmModal.querySelector('div');
+            modalContent.classList.add('modal-leave');
+            modalContent.classList.remove('modal-enter');
+            setTimeout(() => {
+                deleteConfirmModal.classList.add('hidden');
+                itemToDeleteId = null;
+            }, 300);
+        }
+
+        // Fungsi untuk setup listener setelah user login
+        function setupListeners() {
+            if (!userId) return;
+            
+            // Hentikan listener lama jika ada
+            if (unsubscribeInventory) unsubscribeInventory();
+            if (unsubscribeTransactions) unsubscribeTransactions();
+
+            // Setup path collection
+            inventoryCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/inventory`);
+            transactionsCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/transactions`);
+
+            // Listener untuk koleksi inventaris
+            unsubscribeInventory = onSnapshot(inventoryCollectionRef, (snapshot) => {
+                const items = [];
+                snapshot.forEach(doc => {
+                    items.push({ id: doc.id, ...doc.data() });
+                });
+                renderInventory(items);
+            }, (error) => {
+                console.error("Error fetching inventory: ", error);
+                loadingInventory.textContent = 'Gagal memuat data.';
+            });
+
+            // Listener untuk koleksi transaksi
+            unsubscribeTransactions = onSnapshot(transactionsCollectionRef, (snapshot) => {
+                const transactions = [];
+                snapshot.forEach(doc => {
+                    transactions.push({ id: doc.id, ...doc.data() });
+                });
+                renderTransactions(transactions);
+            }, (error) => {
+                console.error("Error fetching transactions: ", error);
+                loadingTransactions.textContent = 'Gagal memuat riwayat.';
+            });
+        }
+
+
+        // Event listener utama setelah DOM dimuat
+        document.addEventListener('DOMContentLoaded', async () => {
+            lucide.createIcons(); // Panggil lucide untuk merender ikon statis
+            
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed: ", error);
+            }
+            
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    userId = user.uid;
+                    setupListeners();
+                } else {
+                    userId = null;
+                    // Hentikan semua listener jika user logout
+                    if (unsubscribeInventory) unsubscribeInventory();
+                    if (unsubscribeTransactions) unsubscribeTransactions();
+                    inventoryList.innerHTML = '';
+                    transactionLog.innerHTML = '';
+                    loadingInventory.textContent = 'Silakan login untuk melihat data.';
+                    loadingTransactions.textContent = 'Silakan login untuk melihat data.';
+                }
+            });
+
+            // Event listener untuk menambah barang
+            addItemForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!userId) {
+                    alert("Anda harus login untuk menambah barang.");
+                    return;
+                }
+
+                const name = itemNameInput.value.trim();
+                const stock = parseInt(initialStockInput.value);
+
+                if (name && !isNaN(stock) && stock >= 0) {
+                    try {
+                        await addDoc(inventoryCollectionRef, {
+                            name: name,
+                            stock: stock,
+                            totalOut: 0,
+                            createdAt: serverTimestamp()
+                        });
+                        itemNameInput.value = '';
+                        initialStockInput.value = '';
+                    } catch (error) {
+                        console.error("Error adding document: ", error);
+                    }
+                }
+            });
+
+            // Event listener untuk tombol di daftar inventaris (delegation)
+            inventoryList.addEventListener('click', (e) => {
+                const target = e.target.closest('button');
+                if (!target) return;
+
+                const id = target.dataset.id;
+                const name = target.dataset.name;
+                const stock = parseInt(target.dataset.stock);
+
+                if (target.classList.contains('stock-in-btn')) {
+                    openModal('masuk', { id, name, stock });
+                } else if (target.classList.contains('stock-out-btn')) {
+                    if (stock > 0) {
+                        openModal('keluar', { id, name, stock });
+                    } else {
+                        // Ganti alert dengan notifikasi yang lebih baik jika ada
+                        alert("Stok barang sudah habis.");
+                    }
+                } else if (target.classList.contains('delete-item-btn')) {
+                    openDeleteModal(id);
+                }
+            });
+
+            // Event listener untuk form transaksi di modal
+            transactionForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!userId) {
+                    alert("Anda harus login untuk melakukan transaksi.");
+                    return;
+                }
+
+                const itemId = modalItemId.value;
+                const type = modalTransactionType.value;
+                const quantity = parseInt(transactionQuantity.value);
+                const notes = transactionNotes.value.trim();
+                const notesIn = transactionNotesIn.value;
+
+                if (!itemId || !type || isNaN(quantity) || quantity <= 0) return;
+
+                const itemRef = doc(db, `artifacts/${appId}/users/${userId}/inventory`, itemId);
+                
+                try {
+                    // Ambil data item terbaru untuk validasi
+                    const itemDoc = await getDocs(query(inventoryCollectionRef, where('__name__', '==', itemId)));
+                    if (itemDoc.empty) {
+                        console.error("Item not found!");
+                        closeModal();
+                        return;
+                    }
+                    const currentItem = itemDoc.docs[0].data();
+                    const currentStock = currentItem.stock;
+                    const currentTotalOut = currentItem.totalOut || 0;
+                    const itemName = currentItem.name;
+
+                    let newStock;
+                    let newTotalOut = currentTotalOut;
+
+                    if (type === 'masuk') {
+                        newStock = currentStock + quantity;
+                    } else {
+                        if (quantity > currentStock) {
+                            alert('Stok tidak mencukupi!');
+                            return;
+                        }
+                        newStock = currentStock - quantity;
+                        newTotalOut = currentTotalOut + quantity;
+                    }
+
+                    // Update stok barang
+                    await updateDoc(itemRef, { 
+                        stock: newStock,
+                        totalOut: newTotalOut
+                    });
+
+                    // Tambah log transaksi
+                    const transactionData = {
+                        itemId: itemId,
+                        itemName: itemName,
+                        type: type,
+                        quantity: quantity,
+                        timestamp: serverTimestamp()
+                    };
+
+                    if (type === 'keluar' && notes) {
+                        transactionData.notes = notes;
+                    } else if (type === 'masuk' && notesIn) {
+                        transactionData.notes = notesIn;
+                    }
+
+                    await addDoc(transactionsCollectionRef, transactionData);
+
+                    closeModal();
+                } catch (error) {
+                    console.error("Error processing transaction: ", error);
+                }
+            });
+            
+            // Event listener untuk konfirmasi hapus
+            confirmDeleteBtn.addEventListener('click', async () => {
+                if (!itemToDeleteId || !userId) return;
+                
+                try {
+                    // Hapus semua transaksi yang berhubungan dengan item ini
+                    const q = query(transactionsCollectionRef, where("itemId", "==", itemToDeleteId));
+                    const querySnapshot = await getDocs(q);
+                    querySnapshot.forEach(async (docSnapshot) => {
+                        await deleteDoc(doc(transactionsCollectionRef, docSnapshot.id));
+                    });
+                    
+                    // Hapus item dari inventaris
+                    await deleteDoc(doc(inventoryCollectionRef, itemToDeleteId));
+                    
+                } catch (error) {
+                    console.error("Error deleting item: ", error);
+                } finally {
+                    closeDeleteModal();
+                }
+            });
+
+
+            // Event listener untuk menutup modal
+            closeModalBtn.addEventListener('click', closeModal);
+            cancelModalBtn.addEventListener('click', closeModal);
+            cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+            
+            // Menutup modal jika klik di luar area modal
+            transactionModal.addEventListener('click', (e) => {
+                if (e.target === transactionModal) closeModal();
+            });
+            deleteConfirmModal.addEventListener('click', (e) => {
+                if (e.target === deleteConfirmModal) closeDeleteModal();
+            });
+        });
+
+    </script>
+</body>
+</html>
+```eof
